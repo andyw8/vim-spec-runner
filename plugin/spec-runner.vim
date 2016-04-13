@@ -1,4 +1,4 @@
-let s:spec_runner_command = '{preloader} {runner} {path}{focus}'
+let s:spec_runner_command = '{environment} {preloader} {runner} {path}{focus}'
 
 let s:FOCUSED = 1
 let s:UNFOCUSED = 0
@@ -54,12 +54,13 @@ function! s:WriteIfEnabled()
 endfunction
 
 function! s:SpecCommand(is_focused)
+  let environment = s:Environment()
   let runner = s:Runner()
   let preloader = s:Preloader()
   let path = s:Path()
   let focus = s:Focus(runner, a:is_focused)
 
-  return s:InterpolateCommand(runner, preloader, path, focus)
+  return s:InterpolateCommand(environment, preloader, runner, path, focus)
 endfunction
 
 function! s:InSpecFile()
@@ -88,7 +89,40 @@ function! s:InJavascriptFile()
   return match(@%, '_spec\.\(js\.coffee\|js\|coffee\)$') != -1
 endfunction
 
+function! s:Environment()
+  if !s:SmartSpringUsage()
+    return ''
+  endif
+
+  if s:InRspecFile() && s:InGemfile('spring-commands-rspec') && s:ShouldBypassSpring()
+    return 'DISABLE_SPRING=1'
+  else
+    return ''
+  endif
+endfunction
+
+function! s:ShouldBypassSpring()
+  let [start_line, start_col] = searchpos('^require.*spec_helper')
+  if start_line >= 1
+    return 1
+  else
+    return 0
+  endif
+endfunction
+
+function! s:SmartSpringUsage()
+  if exists('g:spec_runner_smart_spring_usage')
+    return g:spec_runner_smart_spring_usage
+  endif
+
+  return 0
+endfunction
+
 function! s:Preloader()
+  if s:ShouldBypassSpring()
+    return ''
+  end
+
   if exists('g:spec_runner_preloader')
     return g:spec_runner_preloader
   endif
@@ -166,10 +200,11 @@ function! s:warn(warning_message)
   let v:errmsg = full_error_message
 endfunction
 
-function! s:InterpolateCommand(runner, preloader, path, focus)
+function! s:InterpolateCommand(environment, preloader, runner, path, focus)
   let result = s:spec_runner_command
   let map = {
         \ '{runner}' : a:runner,
+        \ '{environment}' : a:environment,
         \ '{preloader}' : a:preloader,
         \ '{path}' : a:path,
         \ '{focus}' : a:focus,
